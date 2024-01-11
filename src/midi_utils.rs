@@ -1,4 +1,4 @@
-use midi_types::Control;
+use midi_types::{Control, MidiMessage};
 
 #[derive(Copy, Clone)]
 pub enum MidiCC {
@@ -23,4 +23,3 @@ impl Into<Control> for MidiCC {
         Control::new(self as u8)
     }
 }
-

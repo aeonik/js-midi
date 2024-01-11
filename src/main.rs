@@ -5,8 +5,11 @@ use evdev_rs::enums::{EventCode, EventType, EV_ABS};
 use evdev_rs::Device;
 use evdev_rs::ReadFlag;
 use midir::{MidiOutput, MidiOutputConnection};
-use midi_types::{MidiMessage, Channel, Control};
+use midi_types::{MidiMessage, Channel, Control, Value7};
+use midi_convert::render::MidiRenderer;
+
 use std::fs::File;
+use midi_convert::render_slice::MidiRenderSlice;
 
 fn main() {
     let file = File::open("/dev/input/event27").unwrap();
@@ -25,16 +28,31 @@ fn main() {
                 match event.event_type() {
                     Some(EventType::EV_ABS) => match event.event_code {
                         EventCode::EV_ABS(EV_ABS::ABS_X) => {
-                            let midi_value = map_value(event.value);
-                            let midi_message = MidiMessage::ControlChange(Channel::C1, MidiCC::Pan.into(), midi_value.into());
-                            conn_out.send(&midi_message.into());
-                            println!("X Axis moved: {} converted to MIDI {:?} on {}", event.value, midi_message, port_name);
+                            let value = map_value(event.value);
+                            let msg = MidiMessage::ControlChange(
+                                Channel::new(0),
+                                Control::new(MidiCC::Pan as u8),
+                                Value7::new(value),
+                            );
+                            let mut buf = [0; 3];
+                            let len = msg.render_slice(&mut buf);
+                            conn_out.send(&buf[..len]).unwrap();
+                            println!("X Axis moved: {} converted to MIDI {:?} on {}", event.value, value, port_name);
+
+
                         }
                         EventCode::EV_ABS(EV_ABS::ABS_Y) => {
-                            let midi_value = map_value(event.value);
-                            let midi_message = MidiMessage::ControlChange(Channel::C1, MidiCC::Expression.into(), midi_value.into());
-                            conn_out.send(&midi_message.into());
-                            println!("Y Axis moved: {} converted to MIDI {:?} on {}", event.value, midi_message, port_name);
+                            let value = map_value(event.value);
+                            let msg = MidiMessage::ControlChange(
+                                Channel::new(0),
+                                Control::new(MidiCC::BreathController as u8),
+                                Value7::new(value),
+                            );
+                            let mut buf = [0; 3];
+                            let len = msg.render_slice(&mut buf);
+                            conn_out.send(&buf[..len]).unwrap();
+                            println!("X Axis moved: {} converted to MIDI {:?} on {}", event.value, value, port_name);
+
                         }
                         _ => {}
                     },
