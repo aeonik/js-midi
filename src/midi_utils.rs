@@ -1,4 +1,4 @@
-use midi_types::{Control, MidiMessage};
+use midi_types::{Control};
 
 #[derive(Copy, Clone)]
 pub enum MidiCC {
