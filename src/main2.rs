@@ -19,16 +19,9 @@ struct MyApp {
 
 impl Default for MyApp {
     fn default() -> Self {
-        let sdl_context = sdl2::init().unwrap();
+        let sdl_context = initialize_sdl();
         let joystick_subsystem = sdl_context.joystick().unwrap();
-        let joysticks = joystick::open_virpil_joysticks(&joystick_subsystem)
-            .iter()
-            .map(|j| JoystickData {
-                name: j.name(),
-                num_axes: j.num_axes(),
-                num_buttons: j.num_buttons(),
-            })
-            .collect();
+        let joysticks = get_virpil_joysticks(&joystick_subsystem);
         let event_pump = sdl_context.event_pump().unwrap();
 
         Self {
@@ -40,6 +33,18 @@ impl Default for MyApp {
         }
     }
 }
+
+fn initialize_sdl() -> sdl2::Sdl {
+    sdl2::init().unwrap() // Consider handling this Result more gracefully
+}
+
+fn get_virpil_joysticks(joystick_subsystem: &sdl2::JoystickSubsystem) -> Vec<JoystickData> {
+    joystick::open_virpil_joysticks(joystick_subsystem)
+        .iter()
+        .map(|j| JoystickData::from(j))
+        .collect()
+}
+
 
 impl eframe::App for MyApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
@@ -63,32 +68,36 @@ struct JoystickData {
     num_buttons: u32,
 }
 
-impl MyApp {
-    fn process_joystick_events(&mut self) {
-        for event in self.event_pump.poll_iter() {
-            let timestamp = current_millis();
-            match event {
-                Event::JoyAxisMotion { which, axis_idx, value, .. } => {
-                    let name = &self.joysticks[which as usize].name;
-                    println!("{}: Joystick '{}', Axis {} moved to {}", timestamp, name, axis_idx, value);
-                },
-                Event::JoyButtonDown { which, button_idx, .. } => {
-                    let name = &self.joysticks[which as usize].name;
-                    println!("{}: Joystick '{}', Button {} down", timestamp, name, button_idx);
-                },
-                Event::JoyButtonUp { which, button_idx, .. } => {
-                    let name = &self.joysticks[which as usize].name;
-                    println!("{}: Joystick '{}', Button {} up", timestamp, name, button_idx);
-                },
-                Event::JoyHatMotion { which, hat_idx, state, .. } => {
-                    let name = &self.joysticks[which as usize].name;
-                    println!("{}: Joystick '{}', Hat {} moved to {:?}", timestamp, name, hat_idx, state);
-                },
-                _ => {}
-            }
+impl From<&Joystick> for JoystickData {
+    fn from(joystick: &Joystick) -> Self {
+        Self {
+            name: joystick.name(),
+            num_axes: joystick.num_axes(),
+            num_buttons: joystick.num_buttons(),
         }
     }
 }
+
+
+impl MyApp {
+    fn process_joystick_events(&mut self) {
+        for event in self.event_pump.poll_iter() {
+            handle_sdl_event(event, &self.joysticks);
+        }
+    }
+}
+
+fn handle_sdl_event(event: sdl2::event::Event, joysticks: &[JoystickData]) {
+    let timestamp = current_millis();
+    match event {
+        Event::JoyAxisMotion { which, axis_idx, value, .. } => {
+            let name = &joysticks[which as usize].name;
+            println!("{}: Joystick '{}', Axis {} moved to {}", timestamp, name, axis_idx, value);
+        },
+        _ => {}
+    }
+}
+
 
 fn current_millis() -> u128 {
     SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis()
