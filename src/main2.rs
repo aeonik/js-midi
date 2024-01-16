@@ -13,8 +13,8 @@ const MAX_JOYSTICK_VALUE: i32 = 32767;
 
 struct JoystickState {
     joystick: Joystick,
-    axes_states: Vec<f32>, // You can adjust the type based on what you need
-    buttons_states: Vec<bool>, // Assuming a simple pressed/not pressed state
+    axes_states: Vec<f32>,
+    buttons_states: Vec<bool>,
     // Add other state fields as necessary
 }
 
@@ -36,10 +36,8 @@ impl JoystickState {
         }
     }
 
-    // Add more update methods for buttons, hats, etc.
+    // TODO Add more update methods for buttons, hats, etc.
 }
-
-
 
 struct MyApp {
     sdl_context: sdl2::Sdl,
@@ -50,9 +48,6 @@ struct MyApp {
     out_port: MidiOutputPort,
     port_name: String,
 }
-
-
-
 
 impl Default for MyApp {
     fn default() -> Self {
@@ -77,7 +72,6 @@ impl Default for MyApp {
         }
     }
 }
-
 
 fn open_virpil_joysticks(p0: &JoystickSubsystem) -> Vec<JoystickState> {
     let mut joystick_states = Vec::new();
@@ -146,6 +140,21 @@ impl eframe::App for MyApp {
                             }
                         }
                     });
+
+                    // TODO Add capability to map buttons to MIDI notes, CCs, etc.
+                    // Ideas: 1. Click on a button to select it, then click on a MIDI note or CC to map it
+                    //        2. Click and drag from a button to a MIDI note or CC to map it
+                    //        3. Keyboard shortcut to map a button to a MIDI note or CC
+                    // Viz Ideas:
+                    //        1. Create panels for each mapping, allow user to drag and drop to reorder)
+                    //        2. Draw a line from each button to its mapping, like a circuit diagram
+                    //        3. Buttons and axes at top, gravity+funnel style mapping has gravity pull messages down to the bottom
+                    //        4. Mapping is a grid of buttons and axes
+
+                    // Add a button to clear all mappings
+                    // Add a button to save mappings to a file
+                    // Add a button to load mappings from a file
+
                 });
             }
 
