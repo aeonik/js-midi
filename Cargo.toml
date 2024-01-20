@@ -21,7 +21,7 @@ path = "src/main2.rs"
 
 [[bin]]
 name = "test"
-path = "src/ui/test_egui_graph.rs"
+path = "src/egui_examples/test_egui_graph.rs"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
