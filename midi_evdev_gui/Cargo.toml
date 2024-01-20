@@ -1,0 +1,54 @@
+[package]
+name = "midi_evdev_gui"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "midi-evdev"
+path = "src/main.rs"
+
+[[bin]]
+name = "evdev_js"
+path = "src/evdev_js.rs"
+
+[[bin]]
+name = "sdl_js"
+path = "src/sdl_js.rs"
+
+[[bin]]
+name = "midi_evdev_gui"
+path = "src/main2.rs"
+
+[dependencies]
+evdev-rs = {workspace = true}
+midir = {workspace = true}
+midi-types = {workspace = true}
+midi-convert = {workspace = true}
+sdl2 = {workspace = true}
+egui = {workspace = true}
+eframe = {workspace = true}
+env_logger = {workspace = true}
+egui_extras = {workspace = true}
+egui_graphs = {workspace = true}
+petgraph = {workspace = true}
+
+color-eyre = {workspace = true}
+retest = {workspace = true}
+rayon = {workspace = true}
+const_panic = {workspace = true}
+
+[lints.rust]
+unsafe_code = {workspace = true}
+
+[lints.clippy]
+enum_glob_use = {workspace = true}
+pedantic = {workspace = true}
+nursery = {workspace = true}
+unwrap_used = {workspace = true}
+
+[profile.release]
+opt-level = 'z'
+lto = true
+codegen-units = 1
+panic = 'abort'
+strip = 'symbols'

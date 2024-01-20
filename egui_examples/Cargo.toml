@@ -1,0 +1,24 @@
+[package]
+name = "egui_examples"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "egui_test"
+path = "src/egui_test.rs"
+
+[[bin]]
+name = "bevy_example"
+path = "src/bevy_example.rs"
+
+[[bin]]
+name = "interactive"
+path = "src/interactive.rs"
+
+[dependencies]
+eframe = {workspace = true}
+egui = {workspace = true}
+petgraph = {workspace = true}
+egui_graphs = {workspace = true}
+bevy = "0.12.1"
+bevy_egui = "0.24.0"

@@ -1,0 +1,3 @@
+InputEvent { time: TimeVal { tv_sec: 1705086310, tv_usec: 37913 }, event_code: EV_ABS(ABS_RX), value: 30158 }
+InputEvent { time: TimeVal { tv_sec: 1705086310, tv_usec: 37913 }, event_code: EV_SYN(SYN_REPORT), value: 0 }
+InputEvent { time: TimeVal { tv_sec: 1705086310, tv_usec: 41914 }, event_code: EV_ABS(ABS_RY), value: 29831 }
