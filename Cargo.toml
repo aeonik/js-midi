@@ -1,0 +1,60 @@
+[package]
+name = "midi-evdev"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "midi-evdev"
+path = "src/main.rs"
+
+[[bin]]
+name = "evdev_js"
+path = "src/evdev_js.rs"
+
+[[bin]]
+name = "sdl_js"
+path = "src/sdl_js.rs"
+
+[[bin]]
+name = "midi_evdev_gui"
+path = "src/main2.rs"
+
+[[bin]]
+name = "test"
+path = "src/ui/test_egui_graph.rs"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+evdev-rs = "0.6.1"
+midir = "0.9.1"
+midi-types = "0.1.7"
+midi-convert = "0.2.0"
+sdl2 = "0.36.0"
+egui = { version = "0.24.1", default-features = false }
+eframe = "0.24.1"
+env_logger = "0.10.1"
+egui_extras = "0.24.1"
+egui_graphs = "0.17.1"
+petgraph = { version = "0.6", default-features = false, features = ["stable_graph", "matrix_graph"] }
+
+color-eyre = "0.6.2"
+retest = "0.2.3"
+rayon = "1.8.1"
+const_panic = "0.2.8"
+
+[lints.rust]
+unsafe_code = "forbid"
+
+[lints.clippy]
+enum_glob_use = "deny"
+pedantic = "deny"
+nursery = "deny"
+unwrap_used = "deny"
+
+[profile.release]
+opt-level = 'z'
+lto = true
+codegen-units = 1
+panic = 'abort'
+strip = 'symbols'
