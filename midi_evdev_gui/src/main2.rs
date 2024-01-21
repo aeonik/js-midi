@@ -43,16 +43,19 @@ impl JoystickState {
     // TODO Add more update methods for buttons, hats, etc.
 }
 
+#[derive(Clone)]
 enum JoystickNode {
     Axis(AxisNode),
     Button(ButtonNode),
 }
 
+#[derive(Clone)]
 struct AxisNode {
     axis_index: usize,
     value: f32,
 }
 
+#[derive(Clone)]
 struct ButtonNode {
     button_index: usize,
     state: bool,
@@ -79,7 +82,7 @@ struct MyApp {
     ports: Vec<midir::MidiOutputPort>,
     out_port: MidiOutputPort,
     port_name: String,
-    connection_graph: Graph<(), (), Directed>,
+    connection_graph: Graph<(JoystickNode), (), Directed>,
 }
 
 impl Default for MyApp {
@@ -103,14 +106,14 @@ impl Default for MyApp {
             ports,
             out_port,
             port_name,
-            connection_graph: Graph::from(&connection_graph),
+            connection_graph,
         }
     }
 }
 
 
 
-fn generate_graph(joysticks: &[JoystickState]) -> StableGraph<JoystickNode, ()> {
+fn generate_graph(joysticks: &[JoystickState]) -> Graph<(JoystickNode), ()> {
     let mut g = StableGraph::new();
 
     for joystick in joysticks {
@@ -122,14 +125,24 @@ fn generate_graph(joysticks: &[JoystickState]) -> StableGraph<JoystickNode, ()> 
 
                 .add_node(node); // Add the joystick node to the graph
             if let Some(prev_index) = prev_node_index {
-// Connect each node to the previous node
+                // Connect each node to the previous node
                 g.add_edge(prev_index, node_index, ());
             }
             prev_node_index = Some(node_index);
         }
     }
+    Graph::from(&g)
+/*    let a = g.add_node(());
+    let b = g.add_node(());
+    let c = g.add_node(());
 
-    g
+    g.add_edge(a, a, ());
+    g.add_edge(a, b, ());
+    g.add_edge(a, b, ());
+    g.add_edge(b, c, ());
+    g.add_edge(c, a, ());
+
+    Graph::from(&g)*/
 }
 
 fn joystick_to_nodes(joystick: &JoystickState) -> Vec<JoystickNode> {
