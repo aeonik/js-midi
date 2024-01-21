@@ -19,6 +19,7 @@ struct JoystickState {
     joystick: Joystick,
     axes_states: Vec<f32>,
     buttons_states: Vec<bool>,
+    position: Option<egui::Pos2>
     // Add other state fields as necessary
 }
 
@@ -31,6 +32,7 @@ impl JoystickState {
             joystick,
             axes_states: vec![0.0; num_axes],
             buttons_states: vec![false; num_buttons],
+            position: None,
         }
     }
 
@@ -132,17 +134,6 @@ fn generate_graph(joysticks: &[JoystickState]) -> Graph<(JoystickNode), ()> {
         }
     }
     Graph::from(&g)
-/*    let a = g.add_node(());
-    let b = g.add_node(());
-    let c = g.add_node(());
-
-    g.add_edge(a, a, ());
-    g.add_edge(a, b, ());
-    g.add_edge(a, b, ());
-    g.add_edge(b, c, ());
-    g.add_edge(c, a, ());
-
-    Graph::from(&g)*/
 }
 
 fn joystick_to_nodes(joystick: &JoystickState) -> Vec<JoystickNode> {
@@ -225,13 +216,13 @@ impl App for MyApp {
                             // Slider for each axis
                             ui.vertical(|ui| {
                                 for (axis_idx, state) in joystick.axes_states.iter().enumerate() {
-                                    ui.add(egui::Slider::new(&mut state.clone(), 0.0..=MAX_JOYSTICK_VALUE as f32).text(format!("Axis {}", axis_idx)));
+                                    let response = ui.add(egui::Slider::new(&mut state.clone(), 0.0..=MAX_JOYSTICK_VALUE as f32).text(format!("Axis {}", axis_idx)));
                                 }
                             });
 
                             egui::Grid::new("button_grid").striped(true).show(ui, |ui| {
                                 for (button_idx, state) in joystick.buttons_states.iter().enumerate() {
-                                    ui.checkbox(&mut state.clone(), format!("Button {}", button_idx));
+                                    let response = ui.checkbox(&mut state.clone(), format!("Button {}", button_idx));
 
                                     if (button_idx + 1) % 5 == 0 {
                                         ui.end_row();
