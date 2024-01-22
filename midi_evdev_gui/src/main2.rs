@@ -7,10 +7,13 @@ use sdl2::JoystickSubsystem;
 use midir::{MidiOutput, MidiOutputConnection, MidiOutputPort};
 use midi_types::{MidiMessage, Channel, Control, Value7, Note};
 use std::fs::File;
+use egui::{Context, Pos2};
 use midi_convert::render_slice::MidiRenderSlice;
 use egui_graphs::{DefaultEdgeShape, DefaultNodeShape, Graph, GraphView};
 use petgraph::Directed;
 use petgraph::stable_graph::{StableGraph};
+use petgraph::visit::Walker;
+use rayon::iter::Positions;
 
 
 const MAX_JOYSTICK_VALUE: i32 = 32767;
@@ -55,25 +58,28 @@ enum JoystickNode {
 struct AxisNode {
     axis_index: usize,
     value: f32,
+    position: Option<Pos2>,
 }
 
 #[derive(Clone)]
 struct ButtonNode {
     button_index: usize,
     state: bool,
+    position: Option<Pos2>,
 }
 
 impl AxisNode {
     fn new(axis_index: usize, value: f32) -> Self {
-        Self { axis_index, value }
+        Self { axis_index, value, position: None }
     }
 }
 
 impl ButtonNode {
     fn new(button_index: usize, state: bool) -> Self {
-        Self { button_index, state }
+        Self { button_index, state, position: None }
     }
 }
+
 
 
 struct MyApp {
@@ -101,7 +107,7 @@ impl Default for MyApp {
         let port_name = out_port.as_ref()
             .and_then(|port| midi_out.port_name(port).ok())
             .or_else(|| Some("Unknown port".to_string()));
-        let connection_graph = generate_graph(&joysticks);
+        let connection_graph = generate_graph(&joysticks, &[], &[]);
 
         Self {
             sdl_context,
@@ -116,40 +122,83 @@ impl Default for MyApp {
     }
 }
 
+// fn generate_graph(joysticks: &[JoystickState]) -> Graph<(JoystickNode), ()> {
+//     let mut g = StableGraph::new();
+//
+//     for joystick in joysticks {
+//         let nodes = joystick_to_nodes(joystick);
+//
+//         // let mut prev_node_index = None;
+//         for node in nodes {
+//             let node_index = g
+//
+//                 .add_node(node); // Add the joystick node to the graph
+//             // if let Some(prev_index) = prev_node_index {
+//             //     // Connect each node to the previous node
+//             //     g.add_edge(prev_index, node_index, ());
+//             // }
+//             // prev_node_index = Some(node_index);
+//         }
+//     }
+//     // Set all the node positions
+//     let graph = Graph::from(&g).nodes_iter().enumerate().map(|(idx, node)| (idx, node.display().pos)).collect::<Vec<_>>();
+//
+// }
 
-
-fn generate_graph(joysticks: &[JoystickState]) -> Graph<(JoystickNode), ()> {
+fn generate_graph(
+    joysticks: &[JoystickState],
+    axes_positions: &[Vec<Option<Pos2>>],
+    buttons_positions: &[Vec<Option<Pos2>>],
+) -> Graph<JoystickNode, ()> {
     let mut g = StableGraph::new();
 
-    for joystick in joysticks {
-        let nodes = joystick_to_nodes(joystick);
-        let mut prev_node_index = None;
+    for (joystick, (axes_pos, buttons_pos)) in joysticks.iter().zip(axes_positions.iter().zip(buttons_positions.iter())) {
+        let nodes = joystick_to_nodes(joystick, axes_pos, buttons_pos);
 
         for node in nodes {
-            let node_index = g
-
-                .add_node(node); // Add the joystick node to the graph
-            if let Some(prev_index) = prev_node_index {
-                // Connect each node to the previous node
-                g.add_edge(prev_index, node_index, ());
-            }
-            prev_node_index = Some(node_index);
+            g.add_node(node);
         }
     }
+
     Graph::from(&g)
 }
 
-fn joystick_to_nodes(joystick: &JoystickState) -> Vec<JoystickNode> {
-    let mut nodes = Vec::new();
-    for (axis_idx, &state) in joystick.axes_states.iter().enumerate() {
-        nodes.push(JoystickNode::Axis(AxisNode { axis_index: axis_idx, value: state }));
+
+fn create_node_with_position(node_type: NodeType, index: usize, state: f32, position: Option<egui::Pos2>) -> JoystickNode {
+    match node_type {
+        NodeType::Axis => JoystickNode::Axis(AxisNode {
+            axis_index: index,
+            value: state,
+            position,
+        }),
+        NodeType::Button => JoystickNode::Button(ButtonNode {
+            button_index: index,
+            state: state != 0.0,  // Assuming button state is represented as a float
+            position,
+        }),
     }
-    for (button_idx, &state) in joystick.buttons_states.iter().enumerate() {
-        nodes.push(JoystickNode::Button(ButtonNode { button_index: button_idx, state }));
+}
+
+// Enum to distinguish between node types
+enum NodeType {
+    Axis,
+    Button,
+}
+
+fn joystick_to_nodes(
+    joystick: &JoystickState,
+    axes_positions: &[Option<egui::Pos2>],
+    buttons_positions: &[Option<egui::Pos2>],
+) -> Vec<JoystickNode> {
+    let mut nodes = Vec::new();
+    for (axis_idx, (&state, &position)) in joystick.axes_states.iter().zip(axes_positions.iter()).enumerate() {
+        nodes.push(create_node_with_position(NodeType::Axis, axis_idx, state, position));
+    }
+    for (button_idx, (&state, &position)) in joystick.buttons_states.iter().zip(buttons_positions.iter()).enumerate() {
+        nodes.push(create_node_with_position(NodeType::Button, button_idx, if state { 1.0 } else { 0.0 }, position));
     }
     nodes
 }
-
 
 
 fn open_virpil_joysticks(p0: &JoystickSubsystem) -> Vec<JoystickState> {
@@ -188,8 +237,6 @@ impl App for MyApp {
                     let joystick = &mut self.joysticks[which as usize];
                     joystick.buttons_states[button_idx as usize] = true;
                 },
-
-
                 _ => {}
             }
         }
@@ -197,20 +244,55 @@ impl App for MyApp {
         // Redraw UI every frame
         ctx.request_repaint();
 
+        let mut axes_positions_all_joysticks = Vec::new();
+        let mut buttons_positions_all_joysticks = Vec::new();
+
+        // Render the graph in a full-sized layer
+        // egui::Area::new("graph_area")
+        //     .order(egui::Order::Foreground)
+        //     .show(ctx, |ui| {
+        //         ui.add(&mut GraphView::<
+        //             _,
+        //             _,
+        //             _,
+        //             _,
+        //             DefaultNodeShape,
+        //             DefaultEdgeShape,
+        //         >::new(&mut self.connection_graph));
+        //     });
+
+        // Add the graph
+        self.connection_graph = generate_graph(&self.joysticks, &axes_positions_all_joysticks, &buttons_positions_all_joysticks);
+        // Try rendering as background layer
+        egui::Area::new("graph_area")
+            .order(egui::Order::Background)
+            .fixed_pos(egui::pos2(0.0, 0.0))  // Position at the top-left corner
+            .show(ctx, |ui| {
+                let screen_size = ctx.screen_rect().size();
+                egui::Frame::default()
+                    .inner_margin(egui::vec2(0.0, 0.0))  // No margin
+                    .show(ui, |ui| {
+                        ui.set_min_size(screen_size);  // Set the size to cover the entire screen
+                        ui.add(&mut GraphView::<
+                            _,
+                            _,
+                            _,
+                            _,
+                            DefaultNodeShape,
+                            DefaultEdgeShape,
+                        >::new(&mut self.connection_graph));
+                    });
+            });
+
+
+
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.heading("Joystick to MIDI Mapper");
-            // Add the graph
-            ui.add(&mut GraphView::<
-                _,
-                _,
-                _,
-                _,
-                DefaultNodeShape,
-                DefaultEdgeShape,
-            >::new(&mut self.connection_graph));
-
             ui.vertical(|ui| {
                 for joystick in &self.joysticks {
+                    let mut joystick_axes_positions = Vec::new();
+                    let mut joystick_buttons_positions = Vec::new();
+
                     ui.horizontal(|ui| {
                         egui::Window::new(&joystick.joystick.name()).show(ui.ctx(), |ui| {
                             ui.label(format!("Number of axes: {}", joystick.joystick.num_axes()));
@@ -219,23 +301,39 @@ impl App for MyApp {
                             // Slider for each axis
                             ui.vertical(|ui| {
                                 for (axis_idx, state) in joystick.axes_states.iter().enumerate() {
-                                    let response = ui.add(egui::Slider::new(&mut state.clone(), 0.0..=MAX_JOYSTICK_VALUE as f32).text(format!("Axis {}", axis_idx)));
+                                    let slider_response = ui.add(egui::Slider::new(&mut state.clone(), 0.0..=MAX_JOYSTICK_VALUE as f32).text(format!("Axis {}", axis_idx)));
+                                    let slider_center = slider_response.rect.center();
+                                    joystick_axes_positions.push(Some(slider_center));
                                 }
                             });
 
                             egui::Grid::new("button_grid").striped(true).show(ui, |ui| {
                                 for (button_idx, state) in joystick.buttons_states.iter().enumerate() {
-                                    let response = ui.checkbox(&mut state.clone(), format!("Button {}", button_idx));
-
+                                    let button_response = ui.checkbox(&mut state.clone(), format!("Button {}", button_idx));
+                                    let button_center = button_response.rect.center();
                                     if (button_idx + 1) % 5 == 0 {
                                         ui.end_row();
                                     }
+                                    joystick_buttons_positions.push(Some(button_center));
                                 }
                             });
                         });
                     });
+
+                    axes_positions_all_joysticks.push(joystick_axes_positions);
+                    buttons_positions_all_joysticks.push(joystick_buttons_positions);
                 }
             });
+
+
+
+            // Get all node positions
+            // let node_positions = self.connection_graph.nodes_iter()
+            //     .map(|(idx, node)| (idx, node.display().pos))
+            //     .collect::<Vec<_>>();
+            // println!("node_positions: {:?}", node_positions);
+
+
                     // TODO Add capability to map buttons to MIDI notes, CCs, etc.
                     // Ideas: 1. Click on a button to select it, then click on a MIDI note or CC to map it
                     //        2. Click and drag from a button to a MIDI note or CC to map it
@@ -250,40 +348,31 @@ impl App for MyApp {
                     // Add a button to save mappings to a file
                     // Add a button to load mappings from a file
 
+
             // A panel that shows all MIDI ports
-            egui::TopBottomPanel::bottom("midi_panel").show(ctx, |ui| {
-                ui.heading("MIDI Ports");
+            egui::Window::new("MIDI Ports").show(ctx, |ui| {
                 match self.midi_out.ports().as_slice() {
                     [] => {
-                        // No MIDI ports available
                         ui.label("No MIDI output ports available.");
                     },
                     ports => {
-                        // Display available MIDI ports
-                        egui::Grid::new("midi_grid").show(ui, |ui| {
-                            for port in ports {
-                                let port_name = self.midi_out.port_name(port).unwrap_or_else(|_| "Unknown port".to_string());
-                                if ui.selectable_label(self.out_port.as_ref() == Some(port), &port_name).clicked() {
-                                    self.out_port = Some(port.clone());
-                                }
-                                ui.end_row();
+                        for port in ports {
+                            let port_name = self.midi_out.port_name(port).unwrap_or_else(|_| "Unknown port".to_string());
+                            if ui.selectable_label(self.out_port.as_ref() == Some(port), &port_name).clicked() {
+                                self.out_port = Some(port.clone());
                             }
-                        });
+                        }
                     }
                 }
             });
-
-
-
         });
+
     }
 }
 
 fn main() -> Result<(), eframe::Error> {
     let viewport_options = egui::ViewportBuilder {
         inner_size: Some(egui::Vec2::new(1440.0, 1440.0)), // Set your desired window size
-        min_inner_size: Some(egui::Vec2::new(400.0, 300.0)), // Optional: Set minimum window size
-        max_inner_size: Some(egui::Vec2::new(1600.0, 1200.0)), // Optional: Set maximum window size
         resizable: Some(true), // Optional: Set whether the window is resizable
         // ... set other viewport properties as needed
         ..Default::default()
@@ -301,5 +390,3 @@ fn main() -> Result<(), eframe::Error> {
         Box::new(|_cc| Box::new(MyApp::default())),
     )
 }
-
-
