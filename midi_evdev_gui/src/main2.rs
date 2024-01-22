@@ -82,8 +82,8 @@ struct MyApp {
     event_pump: sdl2::EventPump,
     midi_out: MidiOutput,
     ports: Vec<midir::MidiOutputPort>,
-    out_port: MidiOutputPort,
-    port_name: String,
+    out_port: Option<MidiOutputPort>,
+    port_name: Option<String>,
     connection_graph: Graph<(JoystickNode), (), Directed>,
 }
 
@@ -96,8 +96,11 @@ impl Default for MyApp {
 
         let midi_out = MidiOutput::new("My MIDI Output").expect("Failed to create MIDI output");
         let ports = midi_out.ports();
-        let out_port = ports.get(0).expect("No MIDI output ports available").clone();
-        let port_name = midi_out.port_name(&out_port).unwrap_or_else(|_| "Unknown port".to_string());
+        let out_port = ports.get(0).cloned();
+
+        let port_name = out_port.as_ref()
+            .and_then(|port| midi_out.port_name(port).ok())
+            .or_else(|| Some("Unknown port".to_string()));
         let connection_graph = generate_graph(&joysticks);
 
         Self {
@@ -250,16 +253,26 @@ impl App for MyApp {
             // A panel that shows all MIDI ports
             egui::TopBottomPanel::bottom("midi_panel").show(ctx, |ui| {
                 ui.heading("MIDI Ports");
-                egui::Grid::new("midi_grid").show(ui, |ui| {
-                    for port in self.midi_out.ports().iter() {
-                        let port_name = self.midi_out.port_name(port).unwrap_or_else(|_| "Unknown port".to_string());
-                        if ui.selectable_label(self.out_port == *port, &port_name).clicked() {
-                            self.out_port = port.clone();
-                        }
-                        ui.end_row();
+                match self.midi_out.ports().as_slice() {
+                    [] => {
+                        // No MIDI ports available
+                        ui.label("No MIDI output ports available.");
+                    },
+                    ports => {
+                        // Display available MIDI ports
+                        egui::Grid::new("midi_grid").show(ui, |ui| {
+                            for port in ports {
+                                let port_name = self.midi_out.port_name(port).unwrap_or_else(|_| "Unknown port".to_string());
+                                if ui.selectable_label(self.out_port.as_ref() == Some(port), &port_name).clicked() {
+                                    self.out_port = Some(port.clone());
+                                }
+                                ui.end_row();
+                            }
+                        });
                     }
-                });
+                }
             });
+
 
 
         });
